@@ -55,4 +55,15 @@ app.MapGet("/api/db/exists/{key}", (string key, StorageEngine db) =>
     return db.Exists(keyBytes) ? Results.Ok() : Results.NotFound();
 });
 
+app.MapPatch("/api/db/{key}", (string newKey, string oldKey, StorageEngine db) =>
+{
+    Span<byte> newKeyBytes = stackalloc byte[System.Text.Encoding.UTF8.GetByteCount(newKey)];
+    System.Text.Encoding.UTF8.GetBytes(newKey, newKeyBytes);
+    
+    Span<byte> oldKeyBytes = stackalloc byte[System.Text.Encoding.UTF8.GetByteCount(oldKey)];
+    System.Text.Encoding.UTF8.GetBytes(oldKey, oldKeyBytes);
+    
+    return db.Rename(oldKeyBytes, newKeyBytes) ? Results.Ok() : Results.NotFound();
+});
+
 app.Run();
