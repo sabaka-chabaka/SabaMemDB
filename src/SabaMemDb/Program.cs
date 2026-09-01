@@ -29,6 +29,20 @@ app.MapPost("/api/db/{key}", async (string key, HttpRequest request, StorageEngi
     return Results.Ok();
 });
 
+app.MapPost("/api/db/setnx/{key}", async (string key, HttpRequest request, StorageEngine db) =>
+{
+    using var ms = new MemoryStream();
+    await request.Body.CopyToAsync(ms);
+    var valueBytes = ms.ToArray(); 
+
+    Span<byte> keyBytes = stackalloc byte[System.Text.Encoding.UTF8.GetByteCount(key)];
+    System.Text.Encoding.UTF8.GetBytes(key, keyBytes);
+
+    db.SetNotExists(keyBytes, valueBytes.AsSpan());
+
+    return Results.Ok();
+});
+
 app.MapGet("/api/db/{key}", (string key, StorageEngine db) =>
 {
     Span<byte> keyBytes = stackalloc byte[System.Text.Encoding.UTF8.GetByteCount(key)];
