@@ -8,12 +8,12 @@
 ---
 
 ### ✨ Key Features
-- ⚡ **In-Memory скорость** — мгновенный доступ к данным благодаря zero-allocation дисциплине.
+- ⚡ **In-Memory speed** — super fast access to data with zero-allocation discipline.
 ---
 
 ### 📦 Usage in docker
 
-We have a docker image in gitub registry: [here]()
+We have a docker image in gitub registry: [here](https://github.com/sabaka-chabaka/SabaMemDB/pkgs/container/sabamemdb)
 
 ---
 
