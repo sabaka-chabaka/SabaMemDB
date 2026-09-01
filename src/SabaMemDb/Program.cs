@@ -39,4 +39,12 @@ app.MapGet("/api/db/{key}", (string key, StorageEngine db) =>
     return valueSpan.IsEmpty ? Results.NotFound() : Results.Bytes([.. valueSpan], "application/octet-stream");
 });
 
+app.MapDelete("/api/db/{key}", (string key, StorageEngine db) =>
+{
+    Span<byte> keyBytes = stackalloc byte[System.Text.Encoding.UTF8.GetByteCount(key)];
+    System.Text.Encoding.UTF8.GetBytes(key, keyBytes);
+    
+    return db.Delete(keyBytes) ? Results.Ok() : Results.NotFound();
+});
+
 app.Run();

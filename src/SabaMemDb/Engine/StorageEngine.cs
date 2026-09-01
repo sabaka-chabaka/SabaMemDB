@@ -61,6 +61,30 @@ public class StorageEngine : IDisposable
 
         return ReadOnlySpan<byte>.Empty;
     }
+
+    public bool Delete(ReadOnlySpan<byte> key)
+    {
+        var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
+        var bucket = (int)(hash % (ulong)_index.Length);
+    
+        lock (_lockObj)
+        {
+            var entry = _index[bucket];
+        
+            if (entry.KeyHash == hash)
+            {
+                ReadOnlySpan<byte> storedKey = _dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength);
+            
+                if (key.SequenceEqual(storedKey))
+                {
+                    _index[bucket] = default; 
+                    return true;
+                }
+            }
+        }
+    
+        return false;
+    }
     
     public void Dispose() => ArrayPool<byte>.Shared.Return(_dataBuffer);
 }
