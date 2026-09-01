@@ -47,4 +47,12 @@ app.MapDelete("/api/db/{key}", (string key, StorageEngine db) =>
     return db.Delete(keyBytes) ? Results.Ok() : Results.NotFound();
 });
 
+app.MapGet("/api/db/exists/{key}", (string key, StorageEngine db) =>
+{
+    Span<byte> keyBytes = stackalloc byte[System.Text.Encoding.UTF8.GetByteCount(key)];
+    System.Text.Encoding.UTF8.GetBytes(key, keyBytes);
+    
+    return db.Exists(keyBytes) ? Results.Ok() : Results.NotFound();
+});
+
 app.Run();
