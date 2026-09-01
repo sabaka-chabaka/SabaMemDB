@@ -151,6 +151,55 @@ public class StorageEngine : IDisposable
             return true;
         }
     }
+
+    public bool RenameNotExists(ReadOnlySpan<byte> oldKey, ReadOnlySpan<byte> newKey)
+    {
+        if (Exists(newKey)) return false;
+        
+        var oldHash = System.IO.Hashing.XxHash64.HashToUInt64(oldKey);
+        var oldBucket = (int)(oldHash % (ulong)_index.Length);
+
+        var newHash = System.IO.Hashing.XxHash64.HashToUInt64(newKey);
+        var newBucket = (int)(newHash % (ulong)_index.Length);
+
+        lock (_lockObj)
+        {
+            var oldEntry = _index[oldBucket];
+
+            if (oldEntry.KeyHash != oldHash || oldEntry.KeyLength != oldKey.Length)
+            {
+                return false;
+            }
+
+            ReadOnlySpan<byte> storedOldKey = _dataBuffer.AsSpan(oldEntry.KeyOffset, oldEntry.KeyLength);
+            if (!oldKey.SequenceEqual(storedOldKey))
+            {
+                return false;
+            }
+
+            if (_writeOffset + newKey.Length > _dataBuffer.Length)
+            {
+                throw new InvalidOperationException("Not enough space in the buffer");
+            }
+
+            var newKeyOffset = _writeOffset;
+            newKey.CopyTo(_dataBuffer.AsSpan(newKeyOffset));
+            _writeOffset += newKey.Length;
+
+            _index[oldBucket] = default;
+
+            _index[newBucket] = new Entry
+            {
+                KeyHash = newHash,
+                KeyOffset = newKeyOffset,
+                KeyLength = newKey.Length,
+                ValueOffset = oldEntry.ValueOffset,
+                ValueLength = oldEntry.ValueLength
+            };
+
+            return true;
+        }
+    }
     
     public void Dispose() => ArrayPool<byte>.Shared.Return(_dataBuffer);
 }
