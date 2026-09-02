@@ -12,4 +12,6 @@ public struct Entry
     
     public int ValueOffset;
     public int ValueLength;
+    
+    public long ExpiresAt;
 }
