@@ -38,15 +38,18 @@ public partial class StorageEngine : IDisposable
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
         var bucket = (int)(hash % (ulong)_index.Length);
-        
-        var entry = _index[bucket];
 
-        if (entry.KeyHash != hash) return ReadOnlySpan<byte>.Empty;
-        ReadOnlySpan<byte> storedKey = _dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength);
-
-        if (key.SequenceEqual(storedKey))
+        lock (_lockObj)
         {
-            return _dataBuffer.AsSpan(entry.ValueOffset, entry.ValueLength);
+            var entry = _index[bucket];
+
+            if (entry.KeyHash != hash) return ReadOnlySpan<byte>.Empty;
+            ReadOnlySpan<byte> storedKey = _dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength);
+
+            if (key.SequenceEqual(storedKey))
+            {
+                return _dataBuffer.AsSpan(entry.ValueOffset, entry.ValueLength);
+            }
         }
 
         return ReadOnlySpan<byte>.Empty;
