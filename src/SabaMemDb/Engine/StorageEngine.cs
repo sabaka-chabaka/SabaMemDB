@@ -12,6 +12,10 @@ public partial class StorageEngine : IDisposable
     private int _writeOffset = 0;
     private readonly Lock _lockObj = new();
     
+    private int _count = 0;
+    
+    public int Count => _count;
+    
     public void Dispose()
     {
         _cts.Cancel();

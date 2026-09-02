@@ -14,9 +14,16 @@ public partial class StorageEngine : IDisposable
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(15));
 
-        while (await timer.WaitForNextTickAsync(ct))
+        try
         {
-            RunCleanup();
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                RunCleanup();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected on dispose
         }
     }
 
@@ -26,15 +33,16 @@ public partial class StorageEngine : IDisposable
 
         lock (_lockObj)
         {
-            if (_index.Length == 0) return;
+            if (_count == 0) return;
             
             for (var i = 0; i < 50; i++) 
             {
                 var bucket = Random.Shared.Next(0, _index.Length);
                 ref var entry = ref _index[bucket];
-                if (entry.ExpiresAt > 0 && entry.ExpiresAt <= now) 
+                if (entry.KeyLength > 0 && entry.ExpiresAt > 0 && entry.ExpiresAt <= now) 
                 {
                     entry = default; 
+                    _count--;
                 }
             }
         }
