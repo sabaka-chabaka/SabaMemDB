@@ -12,5 +12,10 @@ public partial class StorageEngine : IDisposable
     private int _writeOffset = 0;
     private readonly Lock _lockObj = new();
     
-    public void Dispose() => ArrayPool<byte>.Shared.Return(_dataBuffer);
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+        ArrayPool<byte>.Shared.Return(_dataBuffer);
+    }
 }
