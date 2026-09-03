@@ -1,0 +1,21 @@
+name: Download Image to File
+on:
+  workflow_dispatch:
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Pull and Save Image
+        run: |
+          docker pull ghcr.io/owner/repo:latest
+          docker save -o my-image.tar ghcr.io/owner/repo:latest
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: my-image.tar
