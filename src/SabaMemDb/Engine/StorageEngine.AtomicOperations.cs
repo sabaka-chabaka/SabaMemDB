@@ -2,7 +2,7 @@ namespace SabaMemDb.Engine;
 
 using System.Buffers.Text;
 
-public partial class StorageEngine : IDisposable
+public partial class StorageEngine
 {
     public bool Incr(ReadOnlySpan<byte> key)
     {

@@ -1,6 +1,6 @@
 namespace SabaMemDb.Engine;
 
-public partial class StorageEngine : IDisposable
+public partial class StorageEngine
 {
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _cleanupTask;

@@ -1,6 +1,6 @@
 namespace SabaMemDb.Engine;
 
-public partial class StorageEngine : IDisposable
+public partial class StorageEngine 
 {
     public bool Expire(ReadOnlySpan<byte> key, int seconds)
     {
