@@ -2,6 +2,8 @@
 
 # 🚀 SabaMemDB
 
+### Nuget of client: [![NuGet of client link](https://img.shields.io/nuget/v/sabaka-chabaka.SabaMemDb.Client)](https://www.nuget.org/packages/sabaka-chabaka.SabaMemDb.Client)
+
 **Powerful and light in-memory Key-Value data base written on C#**
 </div>
 
