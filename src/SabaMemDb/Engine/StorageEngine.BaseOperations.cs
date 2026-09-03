@@ -7,7 +7,8 @@ public partial class StorageEngine
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
         var bucket = (int)(hash % (ulong)_index.Length);
 
-        lock (_lockObj)
+        _rwLock.EnterWriteLock();
+        try
         {
             if (_writeOffset + key.Length + value.Length > _dataBuffer.Length)
             {
@@ -40,6 +41,10 @@ public partial class StorageEngine
                 ExpiresAt = 0
             };
         }
+        finally
+        {
+            _rwLock.ExitWriteLock();
+        }
     }
     
     public ReadOnlySpan<byte> Get(ReadOnlySpan<byte> key)
@@ -47,9 +52,10 @@ public partial class StorageEngine
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
         var bucket = (int)(hash % (ulong)_index.Length);
 
-        lock (_lockObj)
+        _rwLock.EnterReadLock();
+        try
         {
-            ref var entry = ref _index[bucket];
+            ref readonly var entry = ref _index[bucket];
 
             if (entry.KeyLength == 0 || entry.KeyHash != hash || entry.KeyLength != key.Length) return ReadOnlySpan<byte>.Empty;
             ReadOnlySpan<byte> storedKey = _dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength);
@@ -59,12 +65,14 @@ public partial class StorageEngine
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (entry.ExpiresAt > 0 && entry.ExpiresAt <= now)
             {
-                entry = default;
-                _count--;
                 return ReadOnlySpan<byte>.Empty;
             }
 
             return _dataBuffer.AsSpan(entry.ValueOffset, entry.ValueLength);
+        }
+        finally
+        {
+            _rwLock.ExitReadLock();
         }
     }
 
@@ -73,7 +81,8 @@ public partial class StorageEngine
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
         var bucket = (int)(hash % (ulong)_index.Length);
     
-        lock (_lockObj)
+        _rwLock.EnterWriteLock();
+        try
         {
             ref var entry = ref _index[bucket];
         
@@ -94,6 +103,10 @@ public partial class StorageEngine
             _count--;
             return true;
         }
+        finally
+        {
+            _rwLock.ExitWriteLock();
+        }
     }
 
     public bool Exists(ReadOnlySpan<byte> key)
@@ -101,9 +114,10 @@ public partial class StorageEngine
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
         var bucket = (int)(hash % (ulong)_index.Length);
         
-        lock (_lockObj)
+        _rwLock.EnterReadLock();
+        try
         {
-            ref var entry = ref _index[bucket];
+            ref readonly var entry = ref _index[bucket];
 
             if (entry.KeyLength == 0 || entry.KeyHash != hash || entry.KeyLength != key.Length) return false;
             ReadOnlySpan<byte> actualKey = _dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength);
@@ -112,12 +126,14 @@ public partial class StorageEngine
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (entry.ExpiresAt > 0 && entry.ExpiresAt <= now)
             {
-                entry = default;
-                _count--;
                 return false;
             }
 
             return true;
+        }
+        finally
+        {
+            _rwLock.ExitReadLock();
         }
     }
 
@@ -129,7 +145,8 @@ public partial class StorageEngine
         var newHash = System.IO.Hashing.XxHash64.HashToUInt64(newKey);
         var newBucket = (int)(newHash % (ulong)_index.Length);
 
-        lock (_lockObj)
+        _rwLock.EnterWriteLock();
+        try
         {
             ref var oldEntry = ref _index[oldBucket];
 
@@ -191,6 +208,10 @@ public partial class StorageEngine
 
             return true;
         }
+        finally
+        {
+            _rwLock.ExitWriteLock();
+        }
     }
 
     public bool RenameNotExists(ReadOnlySpan<byte> oldKey, ReadOnlySpan<byte> newKey)
@@ -203,7 +224,8 @@ public partial class StorageEngine
         var newHash = System.IO.Hashing.XxHash64.HashToUInt64(newKey);
         var newBucket = (int)(newHash % (ulong)_index.Length);
 
-        lock (_lockObj)
+        _rwLock.EnterWriteLock();
+        try
         {
             ref var oldEntry = ref _index[oldBucket];
 
@@ -264,6 +286,10 @@ public partial class StorageEngine
 
             return true;
         }
+        finally
+        {
+            _rwLock.ExitWriteLock();
+        }
     }
 
     public bool SetNotExists(ReadOnlySpan<byte> key, ReadOnlySpan<byte> value)
@@ -271,7 +297,8 @@ public partial class StorageEngine
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
         var bucket = (int)(hash % (ulong)_index.Length);
 
-        lock (_lockObj)
+        _rwLock.EnterWriteLock();
+        try
         {
             ref var entry = ref _index[bucket];
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -327,6 +354,10 @@ public partial class StorageEngine
             };
 
             return true;
+        }
+        finally
+        {
+            _rwLock.ExitWriteLock();
         }
     }
 }

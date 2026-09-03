@@ -7,7 +7,8 @@ public partial class StorageEngine
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
         var bucket = (int)(hash % (ulong)_index.Length);
         
-        lock (_lockObj)
+        _rwLock.EnterWriteLock();
+        try
         {
             ref var entry = ref _index[bucket];
             
@@ -33,6 +34,10 @@ public partial class StorageEngine
             entry.ExpiresAt = now + (long)seconds * 1000L;
             return true;
         }
+        finally
+        {
+            _rwLock.ExitWriteLock();
+        }
     }
     
     public bool PExpire(ReadOnlySpan<byte> key, int milliseconds)
@@ -40,7 +45,8 @@ public partial class StorageEngine
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
         var bucket = (int)(hash % (ulong)_index.Length);
         
-        lock (_lockObj)
+        _rwLock.EnterWriteLock();
+        try
         {
             ref var entry = ref _index[bucket];
             
@@ -66,6 +72,10 @@ public partial class StorageEngine
             entry.ExpiresAt = now + (long)milliseconds;
             return true;
         }
+        finally
+        {
+            _rwLock.ExitWriteLock();
+        }
     }
     
     public bool ExpireAt(ReadOnlySpan<byte> key, long timestamp)
@@ -73,7 +83,8 @@ public partial class StorageEngine
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
         var bucket = (int)(hash % (ulong)_index.Length);
         
-        lock (_lockObj)
+        _rwLock.EnterWriteLock();
+        try
         {
             ref var entry = ref _index[bucket];
             
@@ -100,6 +111,10 @@ public partial class StorageEngine
             entry.ExpiresAt = expireMs;
             return true;
         }
+        finally
+        {
+            _rwLock.ExitWriteLock();
+        }
     }
 
     public int Ttl(ReadOnlySpan<byte> key)
@@ -107,9 +122,10 @@ public partial class StorageEngine
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
         var bucket = (int)(hash % (ulong)_index.Length);
 
-        lock (_lockObj)
+        _rwLock.EnterReadLock();
+        try
         {
-            ref var entry = ref _index[bucket];
+            ref readonly var entry = ref _index[bucket];
         
             if (entry.KeyLength == 0 || entry.KeyHash != hash || entry.KeyLength != key.Length) return -2;
 
@@ -123,12 +139,14 @@ public partial class StorageEngine
 
             if (remainderMs <= 0)
             {
-                entry = default;
-                _count--;
                 return -2;
             }
 
             return (int)((remainderMs + 999) / 1000);
+        }
+        finally
+        {
+            _rwLock.ExitReadLock();
         }
     }
 
@@ -137,9 +155,10 @@ public partial class StorageEngine
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
         var bucket = (int)(hash % (ulong)_index.Length);
 
-        lock (_lockObj)
+        _rwLock.EnterReadLock();
+        try
         {
-            ref var entry = ref _index[bucket];
+            ref readonly var entry = ref _index[bucket];
         
             if (entry.KeyLength == 0 || entry.KeyHash != hash || entry.KeyLength != key.Length) return -2;
 
@@ -153,12 +172,14 @@ public partial class StorageEngine
 
             if (remainderMs <= 0)
             {
-                entry = default;
-                _count--;
                 return -2;
             }
 
             return (int)remainderMs;
+        }
+        finally
+        {
+            _rwLock.ExitReadLock();
         }
     }
 
@@ -167,7 +188,8 @@ public partial class StorageEngine
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
         var bucket = (int)(hash % (ulong)_index.Length);
 
-        lock (_lockObj)
+        _rwLock.EnterWriteLock();
+        try
         {
             ref var entry = ref _index[bucket];
 
@@ -190,6 +212,10 @@ public partial class StorageEngine
 
             entry.ExpiresAt = 0;
             return true;
+        }
+        finally
+        {
+            _rwLock.ExitWriteLock();
         }
     }
 }

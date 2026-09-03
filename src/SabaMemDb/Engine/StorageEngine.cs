@@ -7,7 +7,7 @@ public partial class StorageEngine
     private readonly byte[] _dataBuffer = new byte[256 * 1024 * 1024];
     
     private int _writeOffset = 0;
-    private readonly Lock _lockObj = new();
+    private readonly ReaderWriterLockSlim _rwLock = new();
     
     private int _count;
 }

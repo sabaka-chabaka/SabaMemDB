@@ -23,7 +23,6 @@ public partial class StorageEngine
         }
         catch (OperationCanceledException)
         {
-            // Expected on dispose
         }
     }
 
@@ -31,7 +30,8 @@ public partial class StorageEngine
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-        lock (_lockObj)
+        _rwLock.EnterWriteLock();
+        try
         {
             if (_count == 0) return;
             
@@ -45,6 +45,10 @@ public partial class StorageEngine
                     _count--;
                 }
             }
+        }
+        finally
+        {
+            _rwLock.ExitWriteLock();
         }
     }
 }

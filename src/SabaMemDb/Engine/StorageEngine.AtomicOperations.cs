@@ -9,7 +9,8 @@ public partial class StorageEngine
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
         var bucket = (int)(hash % (ulong)_index.Length);
 
-        lock (_lockObj)
+        _rwLock.EnterWriteLock();
+        try
         {
             ref var entry = ref _index[bucket];
             
@@ -56,6 +57,10 @@ public partial class StorageEngine
 
             return true;
         }
+        finally
+        {
+            _rwLock.ExitWriteLock();
+        }
     }
     
     public bool Decr(ReadOnlySpan<byte> key)
@@ -63,7 +68,8 @@ public partial class StorageEngine
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
         var bucket = (int)(hash % (ulong)_index.Length);
 
-        lock (_lockObj)
+        _rwLock.EnterWriteLock();
+        try
         {
             ref var entry = ref _index[bucket];
             
@@ -110,6 +116,10 @@ public partial class StorageEngine
 
             return true;
         }
+        finally
+        {
+            _rwLock.ExitWriteLock();
+        }
     }
 
     public bool IncrBy(ReadOnlySpan<byte> key, long value)
@@ -117,7 +127,8 @@ public partial class StorageEngine
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
         var bucket = (int)(hash % (ulong)_index.Length);
 
-        lock (_lockObj)
+        _rwLock.EnterWriteLock();
+        try
         {
             ref var entry = ref _index[bucket];
             
@@ -164,6 +175,10 @@ public partial class StorageEngine
 
             return true;
         }
+        finally
+        {
+            _rwLock.ExitWriteLock();
+        }
     }
 
     public bool DecrBy(ReadOnlySpan<byte> key, long value)
@@ -171,7 +186,8 @@ public partial class StorageEngine
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
         var bucket = (int)(hash % (ulong)_index.Length);
 
-        lock (_lockObj)
+        _rwLock.EnterWriteLock();
+        try
         {
             ref var entry = ref _index[bucket];
             
@@ -217,6 +233,10 @@ public partial class StorageEngine
             entry.ValueLength = written;
 
             return true;
+        }
+        finally
+        {
+            _rwLock.ExitWriteLock();
         }
     }
 }
