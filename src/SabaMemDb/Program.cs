@@ -26,119 +26,63 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
-app.MapPost("/api/db/set/{key}", async (string key, HttpRequest request, HttpResponse response, StorageEngine db) =>
+app.MapPost("/api/db/set/{key}", static async ValueTask (string key, HttpRequest request, HttpResponse response, StorageEngine db) =>
 {
     var reader = request.BodyReader;
-    while (true)
+    if (reader.TryRead(out var readResult) && readResult.IsCompleted)
     {
-        var readResult = await reader.ReadAsync();
-        var buffer = readResult.Buffer;
-        if (readResult.IsCompleted)
-        {
-            using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
-            if (buffer.IsSingleSegment)
-            {
-                db.Set(keyBytes.Span, buffer.FirstSpan);
-            }
-            else
-            {
-                var len = (int)buffer.Length;
-                var rentedBody = ArrayPool<byte>.Shared.Rent(len);
-                try
-                {
-                    buffer.CopyTo(rentedBody);
-                    db.Set(keyBytes.Span, rentedBody.AsSpan(0, len));
-                }
-                finally
-                {
-                    ArrayPool<byte>.Shared.Return(rentedBody);
-                }
-            }
-            reader.AdvanceTo(buffer.End);
-            break;
-        }
-        reader.AdvanceTo(buffer.Start, buffer.End);
+        ExecuteSet(readResult.Buffer, key, db);
+        reader.AdvanceTo(readResult.Buffer.End);
+        response.StatusCode = StatusCodes.Status200OK;
+        return;
     }
 
-    response.StatusCode = StatusCodes.Status200OK;
+    await ReadAndSetAsync(key, reader, response, db);
 });
 
-app.MapPost("/api/db/setnx/{key}", async (string key, HttpRequest request, HttpResponse response, StorageEngine db) =>
+app.MapPost("/api/db/setnx/{key}", static async ValueTask (string key, HttpRequest request, HttpResponse response, StorageEngine db) =>
 {
     var reader = request.BodyReader;
-    var success = false;
-    while (true)
+    if (reader.TryRead(out var readResult) && readResult.IsCompleted)
     {
-        var readResult = await reader.ReadAsync();
-        var buffer = readResult.Buffer;
-        if (readResult.IsCompleted)
-        {
-            using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
-            if (buffer.IsSingleSegment)
-            {
-                success = db.SetNotExists(keyBytes.Span, buffer.FirstSpan);
-            }
-            else
-            {
-                var len = (int)buffer.Length;
-                var rentedBody = ArrayPool<byte>.Shared.Rent(len);
-                try
-                {
-                    buffer.CopyTo(rentedBody);
-                    success = db.SetNotExists(keyBytes.Span, rentedBody.AsSpan(0, len));
-                }
-                finally
-                {
-                    ArrayPool<byte>.Shared.Return(rentedBody);
-                }
-            }
-            reader.AdvanceTo(buffer.End);
-            break;
-        }
-        reader.AdvanceTo(buffer.Start, buffer.End);
+        var success = ExecuteSetNx(readResult.Buffer, key, db);
+        reader.AdvanceTo(readResult.Buffer.End);
+        response.StatusCode = success ? StatusCodes.Status200OK : StatusCodes.Status409Conflict;
+        return;
     }
 
-    response.StatusCode = success ? StatusCodes.Status200OK : StatusCodes.Status409Conflict;
+    await ReadAndSetNxAsync(key, reader, response, db);
 });
 
-app.MapGet("/api/db/get/{key}", async (string key, StorageEngine db, HttpResponse response) =>
+app.MapGet("/api/db/get/{key}", static (string key, StorageEngine db, HttpResponse response) =>
 {
-    bool found;
-    {
-        using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
-        var valueSpan = db.Get(keyBytes.Span);
-        found = !valueSpan.IsEmpty;
-        if (found)
-        {
-            response.ContentType = "application/octet-stream";
-            response.StatusCode = StatusCodes.Status200OK;
-            response.ContentLength = valueSpan.Length;
-            response.BodyWriter.Write(valueSpan);
-        }
-    }
-
-    if (!found)
+    using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
+    var valueSpan = db.Get(keyBytes.Span);
+    if (valueSpan.IsEmpty)
     {
         response.StatusCode = StatusCodes.Status404NotFound;
         return;
     }
 
-    await response.BodyWriter.FlushAsync();
+    response.ContentType = "application/octet-stream";
+    response.StatusCode = StatusCodes.Status200OK;
+    response.ContentLength = valueSpan.Length;
+    response.BodyWriter.Write(valueSpan);
 });
 
-app.MapDelete("/api/db/delete/{key}", (string key, StorageEngine db, HttpResponse response) =>
+app.MapDelete("/api/db/delete/{key}", static (string key, StorageEngine db, HttpResponse response) =>
 {
     using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
     response.StatusCode = db.Delete(keyBytes.Span) ? StatusCodes.Status200OK : StatusCodes.Status404NotFound;
 });
 
-app.MapGet("/api/db/exists/{key}", (string key, StorageEngine db, HttpResponse response) =>
+app.MapGet("/api/db/exists/{key}", static (string key, StorageEngine db, HttpResponse response) =>
 {
     using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
     response.StatusCode = db.Exists(keyBytes.Span) ? StatusCodes.Status200OK : StatusCodes.Status404NotFound;
 });
 
-app.MapPatch("/api/db/rename/{oldKey}/{newKey}", (string oldKey, string newKey, StorageEngine db, HttpResponse response) =>
+app.MapPatch("/api/db/rename/{oldKey}/{newKey}", static (string oldKey, string newKey, StorageEngine db, HttpResponse response) =>
 {
     using var oldKeyBytes = new RentedOrStackKey(oldKey, stackalloc byte[512]);
     using var newKeyBytes = new RentedOrStackKey(newKey, stackalloc byte[512]);
@@ -146,7 +90,7 @@ app.MapPatch("/api/db/rename/{oldKey}/{newKey}", (string oldKey, string newKey, 
     response.StatusCode = db.Rename(oldKeyBytes.Span, newKeyBytes.Span) ? StatusCodes.Status200OK : StatusCodes.Status404NotFound;
 });
 
-app.MapPatch("/api/db/renamenx/{oldKey}/{newKey}", (string oldKey, string newKey, StorageEngine db, HttpResponse response) =>
+app.MapPatch("/api/db/renamenx/{oldKey}/{newKey}", static (string oldKey, string newKey, StorageEngine db, HttpResponse response) =>
 {
     using var oldKeyBytes = new RentedOrStackKey(oldKey, stackalloc byte[512]);
     using var newKeyBytes = new RentedOrStackKey(newKey, stackalloc byte[512]);
@@ -154,29 +98,29 @@ app.MapPatch("/api/db/renamenx/{oldKey}/{newKey}", (string oldKey, string newKey
     response.StatusCode = db.RenameNotExists(oldKeyBytes.Span, newKeyBytes.Span) ? StatusCodes.Status200OK : StatusCodes.Status404NotFound;
 });
 
-app.MapPatch("/api/db/expire/{key}/{seconds:int}", (string key, int seconds, StorageEngine db, HttpResponse response) =>
+app.MapPatch("/api/db/expire/{key}/{seconds:int}", static (string key, int seconds, StorageEngine db, HttpResponse response) =>
 {
     using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
     response.StatusCode = db.Expire(keyBytes.Span, seconds) ? StatusCodes.Status200OK : StatusCodes.Status404NotFound;
 });
 
-app.MapPatch("/api/db/pexpire/{key}/{milliseconds:int}", (string key, int milliseconds, StorageEngine db, HttpResponse response) =>
+app.MapPatch("/api/db/pexpire/{key}/{milliseconds:int}", static (string key, int milliseconds, StorageEngine db, HttpResponse response) =>
 {
     using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
     response.StatusCode = db.PExpire(keyBytes.Span, milliseconds) ? StatusCodes.Status200OK : StatusCodes.Status404NotFound;
 });
 
-app.MapPatch("/api/db/expireat/{key}/{timestamp:long}", (string key, long timestamp, StorageEngine db, HttpResponse response) =>
+app.MapPatch("/api/db/expireat/{key}/{timestamp:long}", static (string key, long timestamp, StorageEngine db, HttpResponse response) =>
 {
     using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
     response.StatusCode = db.ExpireAt(keyBytes.Span, timestamp) ? StatusCodes.Status200OK : StatusCodes.Status404NotFound;
 });
 
-app.MapGet("/api/db/ttl/{key}", async (string key, StorageEngine db, HttpResponse response) =>
+app.MapGet("/api/db/ttl/{key}", static (string key, StorageEngine db, HttpResponse response) =>
 {
     int ttl;
+    using (var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]))
     {
-        using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
         ttl = db.Ttl(keyBytes.Span);
     }
 
@@ -187,14 +131,13 @@ app.MapGet("/api/db/ttl/{key}", async (string key, StorageEngine db, HttpRespons
     response.StatusCode = StatusCodes.Status200OK;
     response.ContentLength = written;
     response.BodyWriter.Write(formatted[..written]);
-    await response.BodyWriter.FlushAsync();
 });
 
-app.MapGet("/api/db/pttl/{key}", async (string key, StorageEngine db, HttpResponse response) =>
+app.MapGet("/api/db/pttl/{key}", static (string key, StorageEngine db, HttpResponse response) =>
 {
     int pttl;
+    using (var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]))
     {
-        using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
         pttl = db.Pttl(keyBytes.Span);
     }
 
@@ -205,16 +148,96 @@ app.MapGet("/api/db/pttl/{key}", async (string key, StorageEngine db, HttpRespon
     response.StatusCode = StatusCodes.Status200OK;
     response.ContentLength = written;
     response.BodyWriter.Write(formatted[..written]);
-    await response.BodyWriter.FlushAsync();
 });
 
-app.MapPatch("/api/db/persist/{key}", (string key, StorageEngine db, HttpResponse response) =>
+app.MapPatch("/api/db/persist/{key}", static (string key, StorageEngine db, HttpResponse response) =>
 {
     using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
     response.StatusCode = db.Persist(keyBytes.Span) ? StatusCodes.Status200OK : StatusCodes.Status404NotFound;
 });
 
 app.Run();
+
+static void ExecuteSet(ReadOnlySequence<byte> buffer, string key, StorageEngine db)
+{
+    using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
+    if (buffer.IsSingleSegment)
+    {
+        db.Set(keyBytes.Span, buffer.FirstSpan);
+    }
+    else
+    {
+        var len = (int)buffer.Length;
+        var rentedBody = ArrayPool<byte>.Shared.Rent(len);
+        try
+        {
+            buffer.CopyTo(rentedBody);
+            db.Set(keyBytes.Span, rentedBody.AsSpan(0, len));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rentedBody);
+        }
+    }
+}
+
+static bool ExecuteSetNx(ReadOnlySequence<byte> buffer, string key, StorageEngine db)
+{
+    using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
+    if (buffer.IsSingleSegment)
+    {
+        return db.SetNotExists(keyBytes.Span, buffer.FirstSpan);
+    }
+    else
+    {
+        var len = (int)buffer.Length;
+        var rentedBody = ArrayPool<byte>.Shared.Rent(len);
+        try
+        {
+            buffer.CopyTo(rentedBody);
+            return db.SetNotExists(keyBytes.Span, rentedBody.AsSpan(0, len));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rentedBody);
+        }
+    }
+}
+
+static async ValueTask ReadAndSetAsync(string key, System.IO.Pipelines.PipeReader reader, HttpResponse response, StorageEngine db)
+{
+    while (true)
+    {
+        var readResult = await reader.ReadAsync();
+        var buffer = readResult.Buffer;
+        if (readResult.IsCompleted)
+        {
+            ExecuteSet(buffer, key, db);
+            reader.AdvanceTo(buffer.End);
+            break;
+        }
+        reader.AdvanceTo(buffer.Start, buffer.End);
+    }
+    response.StatusCode = StatusCodes.Status200OK;
+}
+
+static async ValueTask ReadAndSetNxAsync(string key, System.IO.Pipelines.PipeReader reader, HttpResponse response, StorageEngine db)
+{
+    var success = false;
+    while (true)
+    {
+        var readResult = await reader.ReadAsync();
+        var buffer = readResult.Buffer;
+        if (readResult.IsCompleted)
+        {
+            success = ExecuteSetNx(buffer, key, db);
+            reader.AdvanceTo(buffer.End);
+            break;
+        }
+        reader.AdvanceTo(buffer.Start, buffer.End);
+    }
+    response.StatusCode = success ? StatusCodes.Status200OK : StatusCodes.Status409Conflict;
+}
 
 ref struct RentedOrStackKey : IDisposable
 {
@@ -223,19 +246,29 @@ ref struct RentedOrStackKey : IDisposable
 
     public RentedOrStackKey(string key, Span<byte> stackBuffer)
     {
-        int count = System.Text.Encoding.UTF8.GetByteCount(key);
-        if (count <= stackBuffer.Length)
+        int maxBytes = System.Text.Encoding.UTF8.GetMaxByteCount(key.Length);
+        if (maxBytes <= stackBuffer.Length)
         {
+            int written = System.Text.Encoding.UTF8.GetBytes(key, stackBuffer);
+            Span = stackBuffer[..written];
             _rented = null;
-            Span = stackBuffer[..count];
         }
         else
         {
-            _rented = ArrayPool<byte>.Shared.Rent(count);
-            Span = _rented.AsSpan(0, count);
+            int count = System.Text.Encoding.UTF8.GetByteCount(key);
+            if (count <= stackBuffer.Length)
+            {
+                int written = System.Text.Encoding.UTF8.GetBytes(key, stackBuffer);
+                Span = stackBuffer[..written];
+                _rented = null;
+            }
+            else
+            {
+                _rented = ArrayPool<byte>.Shared.Rent(count);
+                int written = System.Text.Encoding.UTF8.GetBytes(key, _rented);
+                Span = _rented.AsSpan(0, written);
+            }
         }
-
-        System.Text.Encoding.UTF8.GetBytes(key, Span);
     }
 
     public void Dispose()
