@@ -159,6 +159,30 @@ app.MapPatch("/api/db/persist/{key}", static (string key, StorageEngine db, Http
     response.StatusCode = db.Persist(keyBytes.Span) ? StatusCodes.Status200OK : StatusCodes.Status404NotFound;
 });
 
+app.MapPatch("/api/db/incr/{key}", static (string key, StorageEngine db, HttpResponse response) =>
+{
+    using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
+    response.StatusCode = db.Incr(keyBytes.Span) ? StatusCodes.Status200OK : StatusCodes.Status404NotFound;
+});
+
+app.MapPatch("/api/db/decr/{key}", static (string key, StorageEngine db, HttpResponse response) =>
+{
+    using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
+    response.StatusCode = db.Decr(keyBytes.Span) ? StatusCodes.Status200OK : StatusCodes.Status404NotFound;
+});
+
+app.MapPatch("/api/db/incrby/{key}/{value}", static (string key, long value, StorageEngine db, HttpResponse response) =>
+{
+    using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
+    response.StatusCode = db.IncrBy(keyBytes.Span, value) ? StatusCodes.Status200OK : StatusCodes.Status404NotFound;
+});
+
+app.MapPatch("/api/db/decrby/{key}/{value}", static (string key, long value, StorageEngine db, HttpResponse response) =>
+{
+    using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
+    response.StatusCode = db.DecrBy(keyBytes.Span, value) ? StatusCodes.Status200OK : StatusCodes.Status404NotFound;
+});
+
 app.Run();
 
 static void ExecuteSet(ReadOnlySequence<byte> buffer, string key, StorageEngine db)
