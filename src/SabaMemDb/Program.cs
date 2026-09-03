@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Buffers.Text;
 using System.Text.Json.Serialization.Metadata;
 using SabaMemDb.Engine;
+using SabaMemDb.Middleware;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateSlimBuilder(args);
@@ -19,6 +20,8 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 var app = builder.Build();
+
+app.UseMiddleware<AuthMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
