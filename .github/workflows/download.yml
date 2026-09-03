@@ -11,8 +11,8 @@ jobs:
 
       - name: Pull and Save Image
         run: |
-          docker pull ghcr.io/owner/repo:latest
-          docker save -o my-image.tar ghcr.io/owner/repo:latest
+          docker pull ghcr.io/sabaka-chabaka/sabamemdb:latest
+          docker save -o my-image.tar ghcr.io/sabaka-chabaka/sabamemdb:latest
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
