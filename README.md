@@ -9,6 +9,7 @@
 
 ### ✨ Key Features
 - ⚡ **In-Memory speed** — super fast access to data with zero-allocation discipline.
+- ⚛️ **Atomic operations** - incrementing and decrementing number's values
 ---
 
 ### 📦 Usage in docker
@@ -37,4 +38,4 @@ We have a docker image in gitub registry: [here](https://github.com/sabaka-chaba
 ---
 
 ### 📄 License
-Project distrubuting under MIT license. Check l`icense file here: [LICENSE]([https://github.com/](https://github.com/sabaka-chabaka/SabaMemDB/blob/master/LICENSE.md)).
+Project distrubuting under MIT license. Check license file here: [LICENSE]([https://github.com/](https://github.com/sabaka-chabaka/SabaMemDB/blob/master/LICENSE.md)).
