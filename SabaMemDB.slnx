@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/SabaMemDb.Client/SabaMemDb.Client.csproj" />
     <Project Path="src/SabaMemDb/SabaMemDb.csproj" />
   </Folder>
 </Solution>
