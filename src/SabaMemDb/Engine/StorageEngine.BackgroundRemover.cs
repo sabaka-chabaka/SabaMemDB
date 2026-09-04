@@ -5,11 +5,6 @@ public partial class StorageEngine
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _cleanupTask;
 
-    public StorageEngine() 
-    {
-        _cleanupTask = Task.Run(() => CleanupLoopAsync(_cts.Token));
-    }
-
     private async Task CleanupLoopAsync(CancellationToken ct)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(15));
@@ -41,8 +36,7 @@ public partial class StorageEngine
                 ref var entry = ref _index[bucket];
                 if (entry.KeyLength > 0 && entry.ExpiresAt > 0 && entry.ExpiresAt <= now) 
                 {
-                    entry = default; 
-                    _count--;
+                    DeleteEntryAt(bucket);
                 }
             }
         }

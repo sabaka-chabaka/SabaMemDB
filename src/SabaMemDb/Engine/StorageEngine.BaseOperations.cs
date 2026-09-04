@@ -5,7 +5,6 @@ public partial class StorageEngine
     public void Set(ReadOnlySpan<byte> key, ReadOnlySpan<byte> value)
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
-        var bucket = (int)(hash % (ulong)_index.Length);
 
         _rwLock.EnterWriteLock();
         try
@@ -15,6 +14,15 @@ public partial class StorageEngine
                 throw new InvalidOperationException("Not enough space in the buffer");
             }
 
+            var bucket = FindOrInsertIndex(key, hash, out var exists);
+            ref var existing = ref _index[bucket];
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var wasActive = exists && (existing.ExpiresAt == 0 || existing.ExpiresAt > now);
+            if (!wasActive)
+            {
+                _count++;
+            }
+
             var kOffset = _writeOffset;
             key.CopyTo(_dataBuffer.AsSpan(kOffset));
             _writeOffset += key.Length;
@@ -22,14 +30,6 @@ public partial class StorageEngine
             int vOffset = _writeOffset;
             value.CopyTo(_dataBuffer.AsSpan(vOffset));
             _writeOffset += value.Length;
-
-            ref var existing = ref _index[bucket];
-            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var wasActive = existing.KeyLength > 0 && (existing.ExpiresAt == 0 || existing.ExpiresAt > now);
-            if (!wasActive)
-            {
-                _count++;
-            }
 
             existing = new Entry
             {
@@ -50,17 +50,14 @@ public partial class StorageEngine
     public ReadOnlySpan<byte> Get(ReadOnlySpan<byte> key)
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
-        var bucket = (int)(hash % (ulong)_index.Length);
 
         _rwLock.EnterReadLock();
         try
         {
+            var bucket = FindEntryIndex(key, hash);
+            if (bucket < 0) return ReadOnlySpan<byte>.Empty;
+
             ref readonly var entry = ref _index[bucket];
-
-            if (entry.KeyLength == 0 || entry.KeyHash != hash || entry.KeyLength != key.Length) return ReadOnlySpan<byte>.Empty;
-            ReadOnlySpan<byte> storedKey = _dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength);
-
-            if (!key.SequenceEqual(storedKey)) return ReadOnlySpan<byte>.Empty;
 
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (entry.ExpiresAt > 0 && entry.ExpiresAt <= now)
@@ -79,29 +76,19 @@ public partial class StorageEngine
     public bool Delete(ReadOnlySpan<byte> key)
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
-        var bucket = (int)(hash % (ulong)_index.Length);
-    
+
         _rwLock.EnterWriteLock();
         try
         {
-            ref var entry = ref _index[bucket];
-        
-            if (entry.KeyLength == 0 || entry.KeyHash != hash || entry.KeyLength != key.Length) return false;
-            
-            ReadOnlySpan<byte> storedKey = _dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength);
-            if (!key.SequenceEqual(storedKey)) return false;
+            var bucket = FindEntryIndex(key, hash);
+            if (bucket < 0) return false;
 
+            ref readonly var entry = ref _index[bucket];
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            if (entry.ExpiresAt > 0 && entry.ExpiresAt <= now)
-            {
-                entry = default;
-                _count--;
-                return false;
-            }
+            var isExpired = entry.ExpiresAt > 0 && entry.ExpiresAt <= now;
 
-            entry = default; 
-            _count--;
-            return true;
+            DeleteEntryAt(bucket);
+            return !isExpired;
         }
         finally
         {
@@ -112,17 +99,14 @@ public partial class StorageEngine
     public bool Exists(ReadOnlySpan<byte> key)
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
-        var bucket = (int)(hash % (ulong)_index.Length);
         
         _rwLock.EnterReadLock();
         try
         {
+            var bucket = FindEntryIndex(key, hash);
+            if (bucket < 0) return false;
+
             ref readonly var entry = ref _index[bucket];
-
-            if (entry.KeyLength == 0 || entry.KeyHash != hash || entry.KeyLength != key.Length) return false;
-            ReadOnlySpan<byte> actualKey = _dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength);
-            if (!key.SequenceEqual(actualKey)) return false;
-
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (entry.ExpiresAt > 0 && entry.ExpiresAt <= now)
             {
@@ -140,32 +124,22 @@ public partial class StorageEngine
     public bool Rename(ReadOnlySpan<byte> oldKey, ReadOnlySpan<byte> newKey)
     {
         var oldHash = System.IO.Hashing.XxHash64.HashToUInt64(oldKey);
-        var oldBucket = (int)(oldHash % (ulong)_index.Length);
-
         var newHash = System.IO.Hashing.XxHash64.HashToUInt64(newKey);
-        var newBucket = (int)(newHash % (ulong)_index.Length);
 
         _rwLock.EnterWriteLock();
         try
         {
-            ref var oldEntry = ref _index[oldBucket];
-
-            if (oldEntry.KeyLength == 0 || oldEntry.KeyHash != oldHash || oldEntry.KeyLength != oldKey.Length)
+            var oldBucket = FindEntryIndex(oldKey, oldHash);
+            if (oldBucket < 0)
             {
                 return false;
             }
 
-            ReadOnlySpan<byte> storedOldKey = _dataBuffer.AsSpan(oldEntry.KeyOffset, oldEntry.KeyLength);
-            if (!oldKey.SequenceEqual(storedOldKey))
-            {
-                return false;
-            }
-
+            ref readonly var oldEntry = ref _index[oldBucket];
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (oldEntry.ExpiresAt > 0 && oldEntry.ExpiresAt <= now)
             {
-                oldEntry = default;
-                _count--;
+                DeleteEntryAt(oldBucket);
                 return false;
             }
 
@@ -180,23 +154,21 @@ public partial class StorageEngine
             }
 
             var savedOldEntry = oldEntry;
-
-            if (oldBucket != newBucket)
-            {
-                ref var newEntry = ref _index[newBucket];
-                var newEntryWasActive = newEntry.KeyLength > 0 && (newEntry.ExpiresAt == 0 || newEntry.ExpiresAt > now);
-                if (newEntryWasActive)
-                {
-                    _count--;
-                }
-                oldEntry = default;
-            }
+            DeleteEntryAt(oldBucket);
 
             var newKeyOffset = _writeOffset;
             newKey.CopyTo(_dataBuffer.AsSpan(newKeyOffset));
             _writeOffset += newKey.Length;
 
-            _index[newBucket] = new Entry
+            var newBucket = FindOrInsertIndex(newKey, newHash, out var exists);
+            ref var newEntry = ref _index[newBucket];
+
+            if (!exists)
+            {
+                _count++;
+            }
+
+            newEntry = new Entry
             {
                 KeyHash = newHash,
                 KeyOffset = newKeyOffset,
@@ -219,42 +191,34 @@ public partial class StorageEngine
         if (oldKey.SequenceEqual(newKey)) return false;
 
         var oldHash = System.IO.Hashing.XxHash64.HashToUInt64(oldKey);
-        var oldBucket = (int)(oldHash % (ulong)_index.Length);
-
         var newHash = System.IO.Hashing.XxHash64.HashToUInt64(newKey);
-        var newBucket = (int)(newHash % (ulong)_index.Length);
 
         _rwLock.EnterWriteLock();
         try
         {
-            ref var oldEntry = ref _index[oldBucket];
-
-            if (oldEntry.KeyLength == 0 || oldEntry.KeyHash != oldHash || oldEntry.KeyLength != oldKey.Length)
+            var oldBucket = FindEntryIndex(oldKey, oldHash);
+            if (oldBucket < 0)
             {
                 return false;
             }
 
-            ReadOnlySpan<byte> storedOldKey = _dataBuffer.AsSpan(oldEntry.KeyOffset, oldEntry.KeyLength);
-            if (!oldKey.SequenceEqual(storedOldKey))
-            {
-                return false;
-            }
-
+            ref readonly var oldEntry = ref _index[oldBucket];
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (oldEntry.ExpiresAt > 0 && oldEntry.ExpiresAt <= now)
             {
-                oldEntry = default;
-                _count--;
+                DeleteEntryAt(oldBucket);
                 return false;
             }
 
-            ref var newEntry = ref _index[newBucket];
-            if (newEntry.KeyLength > 0)
+            var newBucket = FindEntryIndex(newKey, newHash);
+            if (newBucket >= 0)
             {
-                if (newEntry.ExpiresAt > 0 && newEntry.ExpiresAt <= now)
+                ref readonly var existingNew = ref _index[newBucket];
+                if (existingNew.ExpiresAt > 0 && existingNew.ExpiresAt <= now)
                 {
-                    newEntry = default;
-                    _count--;
+                    DeleteEntryAt(newBucket);
+                    oldBucket = FindEntryIndex(oldKey, oldHash);
+                    if (oldBucket < 0) return false;
                 }
                 else
                 {
@@ -267,14 +231,15 @@ public partial class StorageEngine
                 throw new InvalidOperationException("Not enough space in the buffer");
             }
 
-            var savedOldEntry = oldEntry;
-            oldEntry = default;
+            var savedOldEntry = _index[oldBucket];
+            DeleteEntryAt(oldBucket);
 
             var newKeyOffset = _writeOffset;
             newKey.CopyTo(_dataBuffer.AsSpan(newKeyOffset));
             _writeOffset += newKey.Length;
 
-            _index[newBucket] = new Entry
+            var insertBucket = FindOrInsertIndex(newKey, newHash, out _);
+            _index[insertBucket] = new Entry
             {
                 KeyHash = newHash,
                 KeyOffset = newKeyOffset,
@@ -283,6 +248,7 @@ public partial class StorageEngine
                 ValueLength = savedOldEntry.ValueLength,
                 ExpiresAt = savedOldEntry.ExpiresAt
             };
+            _count++;
 
             return true;
         }
@@ -295,32 +261,24 @@ public partial class StorageEngine
     public bool SetNotExists(ReadOnlySpan<byte> key, ReadOnlySpan<byte> value)
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
-        var bucket = (int)(hash % (ulong)_index.Length);
 
         _rwLock.EnterWriteLock();
         try
         {
-            ref var entry = ref _index[bucket];
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var bucket = FindOrInsertIndex(key, hash, out var exists);
 
-            if (entry.KeyLength > 0)
+            if (exists)
             {
-                if (entry.KeyHash == hash && entry.KeyLength == key.Length && key.SequenceEqual(_dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength)))
+                ref readonly var entry = ref _index[bucket];
+                if (entry.ExpiresAt > 0 && entry.ExpiresAt <= now)
                 {
-                    if (entry.ExpiresAt > 0 && entry.ExpiresAt <= now)
-                    {
-                        entry = default;
-                        _count--;
-                    }
-                    else
-                    {
-                        return false;
-                    }
+                    DeleteEntryAt(bucket);
+                    bucket = FindOrInsertIndex(key, hash, out _);
                 }
-                else if (entry.ExpiresAt > 0 && entry.ExpiresAt <= now)
+                else
                 {
-                    entry = default;
-                    _count--;
+                    return false;
                 }
             }
 
@@ -337,13 +295,7 @@ public partial class StorageEngine
             value.CopyTo(_dataBuffer.AsSpan(vOffset));
             _writeOffset += value.Length;
 
-            var wasActive = entry.KeyLength > 0 && (entry.ExpiresAt == 0 || entry.ExpiresAt > now);
-            if (!wasActive)
-            {
-                _count++;
-            }
-
-            entry = new Entry
+            _index[bucket] = new Entry
             {
                 KeyHash = hash,
                 KeyOffset = kOffset,
@@ -352,6 +304,7 @@ public partial class StorageEngine
                 ValueLength = value.Length,
                 ExpiresAt = 0
             };
+            _count++;
 
             return true;
         }

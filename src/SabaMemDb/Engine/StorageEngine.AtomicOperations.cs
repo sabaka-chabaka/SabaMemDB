@@ -7,22 +7,19 @@ public partial class StorageEngine
     public bool Incr(ReadOnlySpan<byte> key)
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
-        var bucket = (int)(hash % (ulong)_index.Length);
 
         _rwLock.EnterWriteLock();
         try
         {
+            var bucket = FindEntryIndex(key, hash);
+            if (bucket < 0) return false;
+
             ref var entry = ref _index[bucket];
             
-            if (entry.KeyLength == 0 || entry.KeyHash != hash || entry.KeyLength != key.Length) return false;
-            ReadOnlySpan<byte> storedKey = _dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength);
-            if (!key.SequenceEqual(storedKey)) return false;
-
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (entry.ExpiresAt > 0 && entry.ExpiresAt <= now)
             {
-                entry = default;
-                _count--;
+                DeleteEntryAt(bucket);
                 return false;
             }
 
@@ -66,22 +63,19 @@ public partial class StorageEngine
     public bool Decr(ReadOnlySpan<byte> key)
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
-        var bucket = (int)(hash % (ulong)_index.Length);
 
         _rwLock.EnterWriteLock();
         try
         {
+            var bucket = FindEntryIndex(key, hash);
+            if (bucket < 0) return false;
+
             ref var entry = ref _index[bucket];
             
-            if (entry.KeyLength == 0 || entry.KeyHash != hash || entry.KeyLength != key.Length) return false;
-            ReadOnlySpan<byte> storedKey = _dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength);
-            if (!key.SequenceEqual(storedKey)) return false;
-
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (entry.ExpiresAt > 0 && entry.ExpiresAt <= now)
             {
-                entry = default;
-                _count--;
+                DeleteEntryAt(bucket);
                 return false;
             }
 
@@ -91,7 +85,7 @@ public partial class StorageEngine
                 return false;
             }
 
-            if (val == long.MaxValue)
+            if (val == long.MinValue)
             {
                 return false;
             }
@@ -125,22 +119,19 @@ public partial class StorageEngine
     public bool IncrBy(ReadOnlySpan<byte> key, long value)
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
-        var bucket = (int)(hash % (ulong)_index.Length);
 
         _rwLock.EnterWriteLock();
         try
         {
+            var bucket = FindEntryIndex(key, hash);
+            if (bucket < 0) return false;
+
             ref var entry = ref _index[bucket];
             
-            if (entry.KeyLength == 0 || entry.KeyHash != hash || entry.KeyLength != key.Length) return false;
-            ReadOnlySpan<byte> storedKey = _dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength);
-            if (!key.SequenceEqual(storedKey)) return false;
-
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (entry.ExpiresAt > 0 && entry.ExpiresAt <= now)
             {
-                entry = default;
-                _count--;
+                DeleteEntryAt(bucket);
                 return false;
             }
 
@@ -150,7 +141,7 @@ public partial class StorageEngine
                 return false;
             }
 
-            if (val == long.MaxValue)
+            if ((value > 0 && val > long.MaxValue - value) || (value < 0 && val < long.MinValue - value))
             {
                 return false;
             }
@@ -184,22 +175,19 @@ public partial class StorageEngine
     public bool DecrBy(ReadOnlySpan<byte> key, long value)
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
-        var bucket = (int)(hash % (ulong)_index.Length);
 
         _rwLock.EnterWriteLock();
         try
         {
+            var bucket = FindEntryIndex(key, hash);
+            if (bucket < 0) return false;
+
             ref var entry = ref _index[bucket];
             
-            if (entry.KeyLength == 0 || entry.KeyHash != hash || entry.KeyLength != key.Length) return false;
-            ReadOnlySpan<byte> storedKey = _dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength);
-            if (!key.SequenceEqual(storedKey)) return false;
-
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (entry.ExpiresAt > 0 && entry.ExpiresAt <= now)
             {
-                entry = default;
-                _count--;
+                DeleteEntryAt(bucket);
                 return false;
             }
 
@@ -209,7 +197,7 @@ public partial class StorageEngine
                 return false;
             }
 
-            if (val == long.MaxValue)
+            if ((value > 0 && val < long.MinValue + value) || (value < 0 && val > long.MaxValue + value))
             {
                 return false;
             }

@@ -5,29 +5,25 @@ public partial class StorageEngine
     public bool Expire(ReadOnlySpan<byte> key, int seconds)
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
-        var bucket = (int)(hash % (ulong)_index.Length);
         
         _rwLock.EnterWriteLock();
         try
         {
+            var bucket = FindEntryIndex(key, hash);
+            if (bucket < 0) return false;
+
             ref var entry = ref _index[bucket];
             
-            if (entry.KeyLength == 0 || entry.KeyHash != hash || entry.KeyLength != key.Length) return false;
-            ReadOnlySpan<byte> storedKey = _dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength);
-            if (!key.SequenceEqual(storedKey)) return false;
-
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (entry.ExpiresAt > 0 && entry.ExpiresAt <= now)
             {
-                entry = default;
-                _count--;
+                DeleteEntryAt(bucket);
                 return false;
             }
 
             if (seconds <= 0)
             {
-                entry = default;
-                _count--;
+                DeleteEntryAt(bucket);
                 return true;
             }
             
@@ -43,29 +39,25 @@ public partial class StorageEngine
     public bool PExpire(ReadOnlySpan<byte> key, int milliseconds)
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
-        var bucket = (int)(hash % (ulong)_index.Length);
         
         _rwLock.EnterWriteLock();
         try
         {
+            var bucket = FindEntryIndex(key, hash);
+            if (bucket < 0) return false;
+
             ref var entry = ref _index[bucket];
             
-            if (entry.KeyLength == 0 || entry.KeyHash != hash || entry.KeyLength != key.Length) return false;
-            ReadOnlySpan<byte> storedKey = _dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength);
-            if (!key.SequenceEqual(storedKey)) return false;
-
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (entry.ExpiresAt > 0 && entry.ExpiresAt <= now)
             {
-                entry = default;
-                _count--;
+                DeleteEntryAt(bucket);
                 return false;
             }
 
             if (milliseconds <= 0)
             {
-                entry = default;
-                _count--;
+                DeleteEntryAt(bucket);
                 return true;
             }
             
@@ -81,30 +73,26 @@ public partial class StorageEngine
     public bool ExpireAt(ReadOnlySpan<byte> key, long timestamp)
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
-        var bucket = (int)(hash % (ulong)_index.Length);
         
         _rwLock.EnterWriteLock();
         try
         {
+            var bucket = FindEntryIndex(key, hash);
+            if (bucket < 0) return false;
+
             ref var entry = ref _index[bucket];
             
-            if (entry.KeyLength == 0 || entry.KeyHash != hash || entry.KeyLength != key.Length) return false;
-            ReadOnlySpan<byte> storedKey = _dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength);
-            if (!key.SequenceEqual(storedKey)) return false;
-
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (entry.ExpiresAt > 0 && entry.ExpiresAt <= now)
             {
-                entry = default;
-                _count--;
+                DeleteEntryAt(bucket);
                 return false;
             }
 
             var expireMs = timestamp < 100_000_000_000L ? timestamp * 1000L : timestamp;
             if (expireMs <= now)
             {
-                entry = default;
-                _count--;
+                DeleteEntryAt(bucket);
                 return true;
             }
             
@@ -120,18 +108,14 @@ public partial class StorageEngine
     public int Ttl(ReadOnlySpan<byte> key)
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
-        var bucket = (int)(hash % (ulong)_index.Length);
 
         _rwLock.EnterReadLock();
         try
         {
+            var bucket = FindEntryIndex(key, hash);
+            if (bucket < 0) return -2;
+
             ref readonly var entry = ref _index[bucket];
-        
-            if (entry.KeyLength == 0 || entry.KeyHash != hash || entry.KeyLength != key.Length) return -2;
-
-            ReadOnlySpan<byte> storedKey = _dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength);
-            if (!key.SequenceEqual(storedKey)) return -2;
-
             if (entry.ExpiresAt == 0) return -1;
 
             long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -153,18 +137,14 @@ public partial class StorageEngine
     public int Pttl(ReadOnlySpan<byte> key)
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
-        var bucket = (int)(hash % (ulong)_index.Length);
 
         _rwLock.EnterReadLock();
         try
         {
+            var bucket = FindEntryIndex(key, hash);
+            if (bucket < 0) return -2;
+
             ref readonly var entry = ref _index[bucket];
-        
-            if (entry.KeyLength == 0 || entry.KeyHash != hash || entry.KeyLength != key.Length) return -2;
-
-            ReadOnlySpan<byte> storedKey = _dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength);
-            if (!key.SequenceEqual(storedKey)) return -2;
-
             if (entry.ExpiresAt == 0) return -1;
 
             long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -186,22 +166,19 @@ public partial class StorageEngine
     public bool Persist(ReadOnlySpan<byte> key)
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
-        var bucket = (int)(hash % (ulong)_index.Length);
 
         _rwLock.EnterWriteLock();
         try
         {
-            ref var entry = ref _index[bucket];
+            var bucket = FindEntryIndex(key, hash);
+            if (bucket < 0) return false;
 
-            if (entry.KeyLength == 0 || entry.KeyHash != hash || entry.KeyLength != key.Length) return false;
-            ReadOnlySpan<byte> storedKey = _dataBuffer.AsSpan(entry.KeyOffset, entry.KeyLength);
-            if (!key.SequenceEqual(storedKey)) return false;
+            ref var entry = ref _index[bucket];
 
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (entry.ExpiresAt > 0 && entry.ExpiresAt <= now)
             {
-                entry = default;
-                _count--;
+                DeleteEntryAt(bucket);
                 return false;
             }
 
