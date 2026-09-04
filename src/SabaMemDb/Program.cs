@@ -3,11 +3,17 @@ using System.Buffers.Text;
 using System.Text.Json.Serialization.Metadata;
 using SabaMemDb.Engine;
 using SabaMemDb.Middleware;
+using SabaMemDb.Settings;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateSlimBuilder(args);
 
 builder.Services.AddSingleton<StorageEngine>();
+
+builder.Services.AddSingleton<ISettings>(provider =>
+{
+    return provider.GetRequiredService<IConfiguration>().GetSection("DbSettings").Get<Settings>();
+});
 
 builder.Services.AddOpenApi();
 

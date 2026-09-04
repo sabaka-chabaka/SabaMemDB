@@ -1,3 +1,5 @@
+using SabaMemDb.Settings;
+
 namespace SabaMemDb.Engine;
 
 public partial class StorageEngine
@@ -63,7 +65,7 @@ public partial class StorageEngine
         lock1.ExitWriteLock();
     }
 
-    public StorageEngine() : this(10_000_000, 256 * 1024 * 1024)
+    public StorageEngine(ISettings settings) : this(settings.MaxEntries, settings.BufferSize * 1024 * 1024)
     {
     }
 

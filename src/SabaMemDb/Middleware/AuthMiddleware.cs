@@ -1,9 +1,11 @@
+using SabaMemDb.Settings;
+
 namespace SabaMemDb.Middleware;
 
-public class AuthMiddleware(RequestDelegate next, ILogger<AuthMiddleware> logger)
+public class AuthMiddleware(RequestDelegate next, ILogger<AuthMiddleware> logger, ISettings settings)
 {
     private const string AuthHeaderName = "X-Auth-Password";
-    private readonly string? _password = Environment.GetEnvironmentVariable("PASSWORD");
+    private readonly string _password = settings.Password;
     
     public async Task InvokeAsync(HttpContext context)
     {
