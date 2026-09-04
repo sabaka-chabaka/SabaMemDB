@@ -3,6 +3,7 @@ namespace SabaMemDb.Middleware;
 public class AuthMiddleware(RequestDelegate next)
 {
     private const string AuthHeaderName = "X-Auth-Password";
+    private readonly string? _password = Environment.GetEnvironmentVariable("PASSWORD");
     
     public async Task InvokeAsync(HttpContext context)
     {
@@ -18,18 +19,12 @@ public class AuthMiddleware(RequestDelegate next)
             
             if (!string.IsNullOrEmpty(passwordHash))
             {
-                if (passwordHash == Environment.GetEnvironmentVariable("PASSWORD"))
+                if (passwordHash == _password)
                 {
                     await next(context);
                     return;
                 }
             }
-        }
-
-        if (Environment.GetEnvironmentVariable("PASSWORD") == null)
-        {
-            await next(context);
-            return;
         }
 
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;

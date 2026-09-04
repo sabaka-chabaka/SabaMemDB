@@ -2,7 +2,7 @@ namespace SabaMemDb.Engine;
 
 using System.Runtime.InteropServices;
 
-[StructLayout(LayoutKind.Sequential, Pack = 1)]
+[StructLayout(LayoutKind.Sequential)]
 public struct Entry
 {
     public ulong KeyHash;
