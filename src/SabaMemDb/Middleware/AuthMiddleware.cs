@@ -1,6 +1,6 @@
 namespace SabaMemDb.Middleware;
 
-public class AuthMiddleware(RequestDelegate next)
+public class AuthMiddleware(RequestDelegate next, ILogger<AuthMiddleware> logger)
 {
     private const string AuthHeaderName = "X-Auth-Password";
     private readonly string? _password = Environment.GetEnvironmentVariable("PASSWORD");
@@ -10,6 +10,7 @@ public class AuthMiddleware(RequestDelegate next)
         if (!context.Request.Path.StartsWithSegments("/api/db"))
         {
             await next(context);
+            logger.LogInformation("Request path ahead of base db path: {Path}", context.Request.Path);
             return;
         }
         
@@ -29,6 +30,7 @@ public class AuthMiddleware(RequestDelegate next)
 
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
         context.Response.ContentType = "application/json";
+        logger.LogWarning("Authentication failed for {Path}", context.Request.Path);
         await context.Response.WriteAsync("{\"error\": \"ERR Authentication required.\"}");
     }
 }
