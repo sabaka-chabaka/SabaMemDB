@@ -6,7 +6,11 @@ public partial class StorageEngine
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
 
-        _rwLock.EnterWriteLock();
+        var start = (int)(hash % (ulong)_index.Length);
+
+        var rwLock = GetLock(start);
+        rwLock.EnterWriteLock();
+        
         try
         {
             if (_writeOffset + key.Length + value.Length > _dataBuffer.Length)
@@ -43,7 +47,7 @@ public partial class StorageEngine
         }
         finally
         {
-            _rwLock.ExitWriteLock();
+            rwLock.ExitWriteLock();
         }
     }
     
@@ -51,7 +55,10 @@ public partial class StorageEngine
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
 
-        _rwLock.EnterReadLock();
+        var start = (int)(hash % (ulong)_index.Length);
+
+        var rwLock = GetLock(start);
+        rwLock.EnterReadLock();
         try
         {
             var bucket = FindEntryIndex(key, hash);
@@ -69,7 +76,7 @@ public partial class StorageEngine
         }
         finally
         {
-            _rwLock.ExitReadLock();
+            rwLock.ExitReadLock();
         }
     }
 
@@ -77,7 +84,10 @@ public partial class StorageEngine
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
 
-        _rwLock.EnterWriteLock();
+        var start = (int)(hash % (ulong)_index.Length);
+
+        var rwLock = GetLock(start);
+        rwLock.EnterWriteLock();
         try
         {
             var bucket = FindEntryIndex(key, hash);
@@ -92,7 +102,7 @@ public partial class StorageEngine
         }
         finally
         {
-            _rwLock.ExitWriteLock();
+            rwLock.ExitWriteLock();
         }
     }
 
@@ -100,7 +110,10 @@ public partial class StorageEngine
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
         
-        _rwLock.EnterReadLock();
+        var start = (int)(hash % (ulong)_index.Length);
+
+        var rwLock = GetLock(start);
+        rwLock.EnterReadLock();
         try
         {
             var bucket = FindEntryIndex(key, hash);
@@ -117,7 +130,7 @@ public partial class StorageEngine
         }
         finally
         {
-            _rwLock.ExitReadLock();
+            rwLock.ExitReadLock();
         }
     }
 
@@ -126,7 +139,10 @@ public partial class StorageEngine
         var oldHash = System.IO.Hashing.XxHash64.HashToUInt64(oldKey);
         var newHash = System.IO.Hashing.XxHash64.HashToUInt64(newKey);
 
-        _rwLock.EnterWriteLock();
+        var oldStart = (int)(oldHash % (ulong)_index.Length);
+        var newStart = (int)(newHash % (ulong)_index.Length);
+
+        EnterWriteLock(oldStart, newStart, out var lock1, out var lock2);
         try
         {
             var oldBucket = FindEntryIndex(oldKey, oldHash);
@@ -182,7 +198,7 @@ public partial class StorageEngine
         }
         finally
         {
-            _rwLock.ExitWriteLock();
+            ExitWriteLock(lock1, lock2);
         }
     }
 
@@ -193,7 +209,10 @@ public partial class StorageEngine
         var oldHash = System.IO.Hashing.XxHash64.HashToUInt64(oldKey);
         var newHash = System.IO.Hashing.XxHash64.HashToUInt64(newKey);
 
-        _rwLock.EnterWriteLock();
+        var oldStart = (int)(oldHash % (ulong)_index.Length);
+        var newStart = (int)(newHash % (ulong)_index.Length);
+
+        EnterWriteLock(oldStart, newStart, out var lock1, out var lock2);
         try
         {
             var oldBucket = FindEntryIndex(oldKey, oldHash);
@@ -254,7 +273,7 @@ public partial class StorageEngine
         }
         finally
         {
-            _rwLock.ExitWriteLock();
+            ExitWriteLock(lock1, lock2);
         }
     }
 
@@ -262,7 +281,10 @@ public partial class StorageEngine
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
 
-        _rwLock.EnterWriteLock();
+        var start = (int)(hash % (ulong)_index.Length);
+
+        var rwLock = GetLock(start);
+        rwLock.EnterWriteLock();
         try
         {
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -310,7 +332,7 @@ public partial class StorageEngine
         }
         finally
         {
-            _rwLock.ExitWriteLock();
+            rwLock.ExitWriteLock();
         }
     }
 }

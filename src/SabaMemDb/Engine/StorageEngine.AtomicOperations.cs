@@ -8,7 +8,10 @@ public partial class StorageEngine
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
 
-        _rwLock.EnterWriteLock();
+        var start = (int)(hash % (ulong)_index.Length);
+
+        var rwLock = GetLock(start);
+        rwLock.EnterWriteLock();
         try
         {
             var bucket = FindEntryIndex(key, hash);
@@ -56,7 +59,7 @@ public partial class StorageEngine
         }
         finally
         {
-            _rwLock.ExitWriteLock();
+            rwLock.ExitWriteLock();
         }
     }
     
@@ -64,7 +67,10 @@ public partial class StorageEngine
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
 
-        _rwLock.EnterWriteLock();
+        var start = (int)(hash % (ulong)_index.Length);
+
+        var rwLock = GetLock(start);
+        rwLock.EnterWriteLock();
         try
         {
             var bucket = FindEntryIndex(key, hash);
@@ -112,7 +118,7 @@ public partial class StorageEngine
         }
         finally
         {
-            _rwLock.ExitWriteLock();
+            rwLock.ExitWriteLock();
         }
     }
 
@@ -120,7 +126,10 @@ public partial class StorageEngine
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
 
-        _rwLock.EnterWriteLock();
+        var start = (int)(hash % (ulong)_index.Length);
+
+        var rwLock = GetLock(start);
+        rwLock.EnterWriteLock();
         try
         {
             var bucket = FindEntryIndex(key, hash);
@@ -168,7 +177,7 @@ public partial class StorageEngine
         }
         finally
         {
-            _rwLock.ExitWriteLock();
+            rwLock.ExitWriteLock();
         }
     }
 
@@ -176,7 +185,10 @@ public partial class StorageEngine
     {
         var hash = System.IO.Hashing.XxHash64.HashToUInt64(key);
 
-        _rwLock.EnterWriteLock();
+        var start = (int)(hash % (ulong)_index.Length);
+
+        var rwLock = GetLock(start);
+        rwLock.EnterWriteLock();
         try
         {
             var bucket = FindEntryIndex(key, hash);
@@ -224,7 +236,7 @@ public partial class StorageEngine
         }
         finally
         {
-            _rwLock.ExitWriteLock();
+            rwLock.ExitWriteLock();
         }
     }
 }

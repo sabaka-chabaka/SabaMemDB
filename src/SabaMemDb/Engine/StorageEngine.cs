@@ -6,24 +6,61 @@ public partial class StorageEngine
     private readonly byte[] _dataBuffer;
     
     private int _writeOffset = 0;
-    private readonly ReaderWriterLockSlim _rwLock = new();
     
     private int _count;
 
-    public int Count
+    public int Count => Volatile.Read(ref _count);
+    
+    private const int LockCount = 4096;
+
+    private readonly ReaderWriterLockSlim[] _locks = CreateLocks();
+
+    private static ReaderWriterLockSlim[] CreateLocks()
     {
-        get
+        var locks = new ReaderWriterLockSlim[LockCount];
+
+        for (var i = 0; i < LockCount; i++)
+            locks[i] = new ReaderWriterLockSlim();
+
+        return locks;
+    }
+
+    private ReaderWriterLockSlim GetLock(int bucket)
+    {
+        return _locks[bucket & (LockCount - 1)];
+    }
+
+    private void EnterWriteLock(int bucket1, int bucket2, out ReaderWriterLockSlim lock1, out ReaderWriterLockSlim? lock2)
+    {
+        var i1 = bucket1 & (LockCount - 1);
+        var i2 = bucket2 & (LockCount - 1);
+
+        if (i1 == i2)
         {
-            _rwLock.EnterReadLock();
-            try
-            {
-                return _count;
-            }
-            finally
-            {
-                _rwLock.ExitReadLock();
-            }
+            lock1 = _locks[i1];
+            lock2 = null;
+            lock1.EnterWriteLock();
         }
+        else if (i1 < i2)
+        {
+            lock1 = _locks[i1];
+            lock2 = _locks[i2];
+            lock1.EnterWriteLock();
+            lock2.EnterWriteLock();
+        }
+        else
+        {
+            lock1 = _locks[i2];
+            lock2 = _locks[i1];
+            lock1.EnterWriteLock();
+            lock2.EnterWriteLock();
+        }
+    }
+
+    private static void ExitWriteLock(ReaderWriterLockSlim lock1, ReaderWriterLockSlim? lock2)
+    {
+        lock2?.ExitWriteLock();
+        lock1.ExitWriteLock();
     }
 
     public StorageEngine() : this(10_000_000, 256 * 1024 * 1024)
