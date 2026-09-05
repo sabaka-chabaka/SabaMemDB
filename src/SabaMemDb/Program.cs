@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Buffers.Text;
+using System.Text;
 using System.Text.Json.Serialization.Metadata;
 using SabaMemDb.Engine;
 using SabaMemDb.Middleware;
@@ -187,6 +188,13 @@ app.MapPatch("/api/db/decrby/{key}/{value}", static (string key, long value, Sto
 {
     using var keyBytes = new RentedOrStackKey(key, stackalloc byte[512]);
     response.StatusCode = db.DecrBy(keyBytes.Span, value) ? StatusCodes.Status200OK : StatusCodes.Status404NotFound;
+});
+
+app.MapGet("/api/db/ping/", static (StorageEngine db, HttpResponse response) =>
+{
+    response.Body = new MemoryStream(Encoding.UTF8.GetBytes(db.Ping()));
+    response.ContentType = "application/text; charset=utf-8";
+    response.StatusCode = StatusCodes.Status200OK;
 });
 
 app.Run();

@@ -162,4 +162,9 @@ public partial class StorageEngine
         _index[hole] = default;
         _count--;
     }
+
+    public string Ping()
+    {
+        return "Pong!";
+    }
 }
