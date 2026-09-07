@@ -186,6 +186,18 @@ public class SMDBClient : IDisposable
         return response.IsSuccessStatusCode;
     }
 
+    public async Task<string> Ping()
+    {
+        var response = await _client.GetAsync($"{_host}/api/db/ping/");
+        return await response.Content.ReadAsStringAsync();
+    }
+
+    public async Task<string> Health()
+    {
+        var response = await _client.GetAsync($"{_host}/api/db/health/");
+        return await response.Content.ReadAsStringAsync();
+    }
+
     public void Dispose()
     {
         if (_disposeClient)

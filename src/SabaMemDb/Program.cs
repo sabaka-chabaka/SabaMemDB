@@ -1,6 +1,8 @@
 using System.Buffers;
 using System.Buffers.Text;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using SabaMemDb.Engine;
 using SabaMemDb.Middleware;
@@ -193,7 +195,14 @@ app.MapPatch("/api/db/decrby/{key}/{value}", static (string key, long value, Sto
 app.MapGet("/api/db/ping/", static (StorageEngine db, HttpResponse response) =>
 {
     response.Body = new MemoryStream(Encoding.UTF8.GetBytes(db.Ping()));
-    response.ContentType = "application/text; charset=utf-8";
+    response.ContentType = "text/plain; charset=utf-8";
+    response.StatusCode = StatusCodes.Status200OK;
+});
+
+app.MapGet("/api/db/health/", static (StorageEngine db, HttpResponse response) =>
+{
+    response.Body = new MemoryStream(Encoding.UTF8.GetBytes($"{db.Count} records, status: online"));
+    response.ContentType = "text/plain; charset=utf-8";
     response.StatusCode = StatusCodes.Status200OK;
 });
 
@@ -320,4 +329,9 @@ ref struct RentedOrStackKey : IDisposable
             _rented = null;
         }
     }
+}
+
+[JsonSerializable(typeof((string, string)))]
+internal partial class AppJsonContext : JsonSerializerContext
+{
 }
