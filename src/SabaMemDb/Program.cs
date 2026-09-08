@@ -199,13 +199,6 @@ app.MapGet("/api/db/ping/", static (StorageEngine db, HttpResponse response) =>
     response.StatusCode = StatusCodes.Status200OK;
 });
 
-app.MapGet("/api/db/health/", static (StorageEngine db, HttpResponse response) =>
-{
-    response.Body = new MemoryStream(Encoding.UTF8.GetBytes($"{db.Count} records, status: online"));
-    response.ContentType = "text/plain; charset=utf-8";
-    response.StatusCode = StatusCodes.Status200OK;
-});
-
 app.Run();
 
 static void ExecuteSet(ReadOnlySequence<byte> buffer, string key, StorageEngine db)

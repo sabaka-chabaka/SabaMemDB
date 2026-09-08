@@ -192,12 +192,6 @@ public class SMDBClient : IDisposable
         return await response.Content.ReadAsStringAsync();
     }
 
-    public async Task<string> Health()
-    {
-        var response = await _client.GetAsync($"{_host}/api/db/health/");
-        return await response.Content.ReadAsStringAsync();
-    }
-
     public void Dispose()
     {
         if (_disposeClient)
