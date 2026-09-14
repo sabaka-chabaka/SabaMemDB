@@ -217,6 +217,42 @@ public class SMDBClientTests
     }
 
     [Fact]
+    public async Task HealthCheckMethods_WorkAsExpected()
+    {
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            var uri = req.RequestUri?.ToString() ?? "";
+            if (uri.Contains("/health"))
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"status\":\"Healthy\"}") };
+            return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+        });
+
+        using var httpClient = new HttpClient(handler);
+        using var client = new SMDBClient(httpClient, "http://localhost:5000");
+
+        Assert.True(await client.IsHealthyAsync());
+        var healthJson = await client.GetHealthAsync();
+        Assert.NotNull(healthJson);
+        Assert.Contains("Healthy", healthJson);
+    }
+
+    [Fact]
+    public async Task HealthCheckMethods_HandleUnhealthyStatus()
+    {
+        var handler = new MockHttpMessageHandler(req =>
+        {
+            return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+        });
+
+        using var httpClient = new HttpClient(handler);
+        using var client = new SMDBClient(httpClient, "http://localhost:5000");
+
+        Assert.False(await client.IsHealthyAsync());
+        var healthJson = await client.GetHealthAsync();
+        Assert.Null(healthJson);
+    }
+
+    [Fact]
     public void Constructors_HandleHostAndDispose()
     {
         using var c1 = new SMDBClient("http://myhost:1234/", "p1");

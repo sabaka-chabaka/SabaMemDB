@@ -192,6 +192,23 @@ public class SMDBClient : IDisposable
         return await response.Content.ReadAsStringAsync();
     }
 
+    public async Task<string?> GetHealthAsync()
+    {
+        var response = await _client.GetAsync($"{_host}/health");
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadAsStringAsync();
+    }
+
+    public async Task<bool> IsHealthyAsync()
+    {
+        var response = await _client.GetAsync($"{_host}/health");
+        return response.IsSuccessStatusCode;
+    }
+
     public void Dispose()
     {
         if (_disposeClient)
