@@ -4,7 +4,9 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using SabaMemDb.Engine;
+using SabaMemDb.Health;
 using SabaMemDb.Middleware;
 using SabaMemDb.Settings;
 using Scalar.AspNetCore;
@@ -17,6 +19,9 @@ builder.Services.AddSingleton<ISettings>(provider =>
 {
     return provider.GetRequiredService<IConfiguration>().GetSection("DbSettings").Get<Settings>();
 });
+
+builder.Services.AddHealthChecks()
+    .AddCheck<SabaMemDbHealthCheck>("saba_mem_db", tags: ["db", "ready", "live"]);
 
 builder.Services.AddOpenApi();
 
@@ -37,6 +42,29 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     app.MapScalarApiReference();
 }
+
+app.MapGet("/health", static async (HealthCheckService healthCheckService, HttpContext context) =>
+{
+    var report = await healthCheckService.CheckHealthAsync();
+    context.Response.StatusCode = report.Status == HealthStatus.Unhealthy
+        ? StatusCodes.Status503ServiceUnavailable
+        : StatusCodes.Status200OK;
+    await HealthCheckResponseWriter.WriteResponse(context, report);
+})
+.WithTags("Health")
+.WithSummary("Health Check")
+.WithDescription("Returns health and memory diagnostics.");
+
+app.MapGet("/healthz", static async (HealthCheckService healthCheckService, HttpContext context) =>
+{
+    var report = await healthCheckService.CheckHealthAsync();
+    context.Response.StatusCode = report.Status == HealthStatus.Unhealthy
+        ? StatusCodes.Status503ServiceUnavailable
+        : StatusCodes.Status200OK;
+    await HealthCheckResponseWriter.WriteResponse(context, report);
+})
+.WithTags("Health")
+.WithSummary("Liveness Check");
 
 app.MapPost("/api/db/set/{key}", static async ValueTask (string key, HttpRequest request, HttpResponse response, StorageEngine db) =>
 {

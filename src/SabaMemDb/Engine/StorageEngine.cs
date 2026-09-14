@@ -13,6 +13,11 @@ public partial class StorageEngine
 
     public int Count => Volatile.Read(ref _count);
     
+    public int ArrayAllocated => Volatile.Read(ref _writeOffset);
+    public int AllocatedBytes => Volatile.Read(ref _writeOffset);
+    public int BufferCapacity => _dataBuffer.Length;
+    public int IndexCapacity => _index.Length;
+    
     private const int LockCount = 4096;
 
     private readonly ReaderWriterLockSlim[] _locks = CreateLocks();
